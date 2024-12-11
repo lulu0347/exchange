@@ -1,0 +1,73 @@
+package com.example.demo.collection;
+
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.LocalDateTime;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.web.client.RestTemplate;
+
+import com.example.demo.collection.service.CollectionBatchService;
+import com.example.demo.collection.vo.Collection;
+
+public class CollectionBatchServiceTest {
+
+    @Mock
+    private CollectionRepository collectionRepository;
+
+    @Mock
+    private RestTemplate restTemplate;
+
+    @InjectMocks
+    private CollectionBatchService collectionBatchService;
+
+    public CollectionBatchServiceTest() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testGetExchangeData() {
+        // Mock API 返回的 JSON 字符串
+        String mockApiResponse = "[\n" +
+                "  { \"Date\": \"20241209\", \"USD/NTD\": \"30.1234\" },\n" +
+                "  { \"Date\": \"20241210\", \"USD/NTD\": \"30.5678\" }\n" +
+                "]";
+
+        // Mock RestTemplate 的行為
+        when(restTemplate.getForObject("https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates", String.class))
+                .thenReturn(mockApiResponse);
+
+        // 執行批次方法
+        collectionBatchService.getExchangeData();
+
+        // 驗證解析後的資料是否正確存入資料庫
+        verify(collectionRepository, times(1)).saveAll(argThat(collections -> {
+            // 驗證集合大小
+            if (collections.size() != 2) {
+                return false;
+            }
+
+            // 驗證第一筆資料
+            Collection firstRecord = collections.get(0);
+            if (!firstRecord.getUsdToNtd().equals(30.1234) ||
+                !firstRecord.getExchangeDate().equals(LocalDateTime.of(2024, 12, 9, 18, 0))) {
+                return false;
+            }
+
+            // 驗證第二筆資料
+            Collection secondRecord = collections.get(1);
+            if (!secondRecord.getUsdToNtd().equals(30.5678) ||
+                !secondRecord.getExchangeDate().equals(LocalDateTime.of(2024, 12, 10, 18, 0))) {
+                return false;
+            }
+
+            return true;
+        }));
+    }
+}

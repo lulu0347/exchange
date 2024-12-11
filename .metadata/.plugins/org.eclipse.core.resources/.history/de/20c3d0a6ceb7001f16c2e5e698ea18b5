@@ -1,0 +1,22 @@
+package com.example.demo.collection.vo;
+
+import java.util.List;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class ExchangeResponseWrapper{
+	private ErrorResponse error;
+    private List<ExchangeResponse> currency;
+    
+    public ExchangeResponseWrapper(ErrorResponse error) {
+        this.error = error;
+    }
+}
+

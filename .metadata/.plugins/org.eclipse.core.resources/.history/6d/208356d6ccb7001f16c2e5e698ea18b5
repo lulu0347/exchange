@@ -1,0 +1,20 @@
+package com.example.demo.collection.vo;
+
+import lombok.Data;
+
+@Data
+public class ErrorResponse {
+    private String code;
+    private String message;
+
+    // 私有構造器，避免外部直接使用
+    private ErrorResponse(String code, String message) {
+        this.code = code;
+        this.message = message;
+    }
+
+    // 靜態工廠方法
+    public static ErrorResponse error(String code, String message) {
+        return new ErrorResponse(code, message);
+    }
+}

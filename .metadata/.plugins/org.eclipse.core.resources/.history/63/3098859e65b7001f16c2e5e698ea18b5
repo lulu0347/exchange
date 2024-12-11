@@ -1,0 +1,46 @@
+package com.example.demo.forex;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+
+@SpringBootTest
+public class ForexBatchServiceTest {
+
+    @MockBean
+    private ForexRateRepository forexRateRepository;
+
+    @MockBean
+    private RestTemplate restTemplate;
+
+    @Test
+    public void testFetchAndStoreForexRates() throws JsonProcessingException {
+        // 模拟 API 响应数据
+        String mockResponse = """
+            [{"Date":"20241101","USD/NTD":"31.968"},
+             {"Date":"20241102","USD/NTD":"32.005"}]
+        """;
+
+        // Mock RestTemplate 的返回值
+        when(restTemplate.getForObject(any(String.class), eq(String.class))).thenReturn(mockResponse);
+
+        ForexBatchService forexBatchService = new ForexBatchService(forexRateRepository, restTemplate);
+
+        // 调用方法
+        forexBatchService.fetchAndStoreForexRates();
+
+        // 验证是否正确解析并保存数据
+        verify(forexRateRepository, times(2)).save(any(ForexRate.class));
+    }
+}

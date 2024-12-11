@@ -1,0 +1,65 @@
+package com.example.demo.forex;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+
+
+@Service
+@RequiredArgsConstructor
+public class ForexBatchService {
+
+    private final ForexRateRepository forexRateRepository;
+    private final RestTemplate restTemplate;
+
+    public ForexBatchService(ForexRateRepository forexRateRepository, RestTemplate restTemplate) {
+        this.forexRateRepository = forexRateRepository;
+        this.restTemplate = restTemplate;
+    }
+
+    @Scheduled(cron = "0 0 18 * * ?")
+    public void fetchAndStoreForexRates() {
+        String apiUrl = "https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates";
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+        try {
+            // 获取原始 JSON 响应
+            String response = restTemplate.getForObject(apiUrl, String.class);
+
+            // 将 JSON 转换为 List<Map<String, String>>
+            ObjectMapper objectMapper = new ObjectMapper();
+            List<Map<String, String>> rates = objectMapper.readValue(response, new TypeReference<>() {});
+
+            // 处理每条记录
+            for (Map<String, String> rate : rates) {
+                String dateStr = rate.get("Date");
+                String usdToNtdStr = rate.get("USD/NTD");
+
+                if (dateStr != null && usdToNtdStr != null) {
+                    // 转换日期格式
+                    LocalDateTime exchangeDate = LocalDateTime.parse(dateStr + " 18:00:00", DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss"));
+                    Double usdToNtd = Double.valueOf(usdToNtdStr);
+
+                    // 保存到数据库
+                    ForexRate forexRate = new ForexRate();
+                    forexRate.setUsdToNtd(usdToNtd);
+                    forexRate.setExchangeDate(exchangeDate);
+
+                    forexRateRepository.save(forexRate);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

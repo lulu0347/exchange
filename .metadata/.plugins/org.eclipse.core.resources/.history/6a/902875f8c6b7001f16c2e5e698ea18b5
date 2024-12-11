@@ -1,0 +1,11 @@
+package com.example.demo.collection;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ForexRequest {
+    private LocalDate startDate;
+    private LocalDate endDate;
+    private String currency;
+}
+

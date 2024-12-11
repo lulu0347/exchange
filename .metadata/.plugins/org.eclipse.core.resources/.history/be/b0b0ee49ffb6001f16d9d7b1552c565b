@@ -1,0 +1,46 @@
+package com.example.demo.forex;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+@Service
+public class ForexBatchService {
+
+    private final ForexRateRepository forexRateRepository;
+    private final RestTemplate restTemplate;
+
+    public ForexBatchService(ForexRateRepository forexRateRepository, RestTemplate restTemplate) {
+        this.forexRateRepository = forexRateRepository;
+        this.restTemplate = restTemplate;
+    }
+
+    @Scheduled(cron = "0 0 18 * * ?") // 每日18:00
+    public void fetchAndStoreForexRates() {
+        String apiUrl = "https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates";
+
+        try {
+            Map<String, Object>[] response = restTemplate.getForObject(apiUrl, Map[].class);
+
+            if (response != null) {
+                for (Map<String, Object> rate : response) {
+                    if ("USD".equals(rate.get("Currency"))) {
+                        Double usdToNtd = Double.valueOf(rate.get("Exrate").toString());
+                        LocalDateTime exchangeDate = LocalDateTime.parse(rate.get("Date").toString());
+
+                        ForexRate forexRate = new ForexRate();
+                        forexRate.setUsdToNtd(usdToNtd);
+                        forexRate.setExchangeDate(exchangeDate);
+
+                        forexRateRepository.save(forexRate);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

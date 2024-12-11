@@ -1,0 +1,127 @@
+package com.example.demo.collection;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.awt.PageAttributes.MediaType;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.web.client.RestTemplate;
+
+import com.example.demo.collection.service.CollectionBatchService;
+import com.example.demo.collection.vo.ExchangeResponse;
+
+public class CollectionBatchServiceTest {
+	
+	@Mock
+	private CollectionRepository collectionRepository;
+
+	@Mock
+	private RestTemplate restTemplate;
+	
+    @Mock
+    private CollectionBatchService collectionBatchService;
+
+    @InjectMocks
+    private CollectionBatchController collectionBatchController;
+
+    private MockMvc mockMvc;
+
+	public CollectionBatchServiceTest() {
+		MockitoAnnotations.openMocks(this);
+	}
+
+	@Test
+	public void testGetExchangeData() {
+		
+		String mockApiResponse = "[\n" + "  { \"Date\": \"20241209\", \"USD/NTD\": \"30.1234\" },\n"
+				+ "  { \"Date\": \"20241210\", \"USD/NTD\": \"30.5678\" }\n" + "]";
+
+		when(restTemplate.getForObject("https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates", String.class))
+				.thenReturn(mockApiResponse);
+
+		collectionBatchService.getExchangeData();
+
+		verify(collectionRepository, times(2)).save(argThat(collection -> {
+			if (collection.getUsdToNtd() == 30.1234
+					&& collection.getExchangeDate().equals(LocalDateTime.of(2024, 12, 9, 18, 0))) {
+				return true;
+			}
+			if (collection.getUsdToNtd() == 30.5678
+					&& collection.getExchangeDate().equals(LocalDateTime.of(2024, 12, 10, 18, 0))) {
+				return true;
+			}
+			return false;
+		}));
+	}
+	
+	
+    @Test
+    public void testGetHistoricalExchange_Success() throws Exception {
+        // Mock 返回的數據
+        when(collectionBatchService.getHistoricalExchange(
+                LocalDate.of(2024, 1, 1),
+                LocalDate.of(2024, 1, 1),
+                "usd"
+        )).thenReturn(Arrays.asList(
+                new ExchangeResponse("20240103", "31.01"),
+                new ExchangeResponse("20240104", "31.016")
+        ));
+
+        // 發送請求並驗證結果
+        mockMvc.perform(post("/api/getHistoryExchange")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"startDate\": \"2024-01-01\", \"endDate\": \"2024-01-01\", \"currency\": \"usd\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error.code").value("0000"))
+                .andExpect(jsonPath("$.error.message").value("成功"))
+                .andExpect(jsonPath("$.currency[0].date").value("20240103"))
+                .andExpect(jsonPath("$.currency[0].usd").value("31.01"))
+                .andExpect(jsonPath("$.currency[1].date").value("20240104"))
+                .andExpect(jsonPath("$.currency[1].usd").value("31.016"));
+    }
+
+    @Test
+    public void testGetHistoricalExchange_InvalidDateRange() throws Exception {
+        // 模擬日期範圍錯誤
+        when(collectionBatchService.getHistoricalExchange(any(), any(), any()))
+                .thenThrow(new IllegalArgumentException("日期區間不符"));
+
+        // 發送請求並驗證結果
+        mockMvc.perform(post("/api/getHistoryExchange")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"startDate\": \"2022-01-01\", \"endDate\": \"2024-12-01\", \"currency\": \"usd\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("E001"))
+                .andExpect(jsonPath("$.error.message").value("日期區間不符"))
+                .andExpect(jsonPath("$.currency").doesNotExist());
+    }
+
+    @Test
+    public void testGetHistoricalExchange_InvalidCurrency() throws Exception {
+        // 模擬幣別錯誤
+        when(collectionBatchService.getHistoricalExchange(any(), any(), any()))
+                .thenThrow(new IllegalArgumentException("一次僅能查一種幣別"));
+
+        // 發送請求並驗證結果
+        mockMvc.perform(post("/api/getHistoryExchange")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"startDate\": \"2024-01-01\", \"endDate\": \"2024-01-01\", \"currency\": \"eur\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("E001"))
+                .andExpect(jsonPath("$.error.message").value("一次僅能查一種幣別"))
+                .andExpect(jsonPath("$.currency").doesNotExist());
+    }
+}

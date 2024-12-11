@@ -1,0 +1,59 @@
+package com.example.demo.collection;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+
+
+@Service
+@RequiredArgsConstructor
+@Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class, timeout = 60)
+public class CollectionBatchService {
+
+    private final CollectionRepository collectionRepository;
+    private final RestTemplate restTemplate;
+
+    @Scheduled(cron = "0 0 18 * * ?")
+    public void fetchAndStoreForexRates() {
+        final String apiUrl = "https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates";
+        try {
+            String response = restTemplate.getForObject(apiUrl, String.class);
+
+            
+            ObjectMapper objectMapper = new ObjectMapper();
+            List<Map<String, String>> rates = objectMapper.readValue(response, new TypeReference<>() {});
+
+            
+            for (Map<String, String> rate : rates) {
+                String dateStr = rate.get("Date");
+                String usdToNtdStr = rate.get("USD/NTD");
+
+                if (dateStr != null && usdToNtdStr != null) {
+                   
+                    LocalDateTime exchangeDate = LocalDateTime.parse(dateStr + " 18:00:00", DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss"));
+                    Double usdToNtd = Double.valueOf(usdToNtdStr);
+
+                    Collection collection = new Collection();
+                    collection.setUsdToNtd(usdToNtd);
+                    collection.setExchangeDate(exchangeDate);
+
+                    collectionRepository.save(collection);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

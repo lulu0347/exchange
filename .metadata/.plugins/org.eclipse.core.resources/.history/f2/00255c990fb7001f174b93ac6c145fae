@@ -1,0 +1,1 @@
+INSERT INTO forex_rates (id, usd_to_ntd, exchange_date) VALUES (1, 30.1234, '2024-12-09 18:00:00');

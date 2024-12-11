@@ -1,0 +1,17 @@
+package com.example.demo.collection;
+
+import java.time.LocalDate;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ExchangeRequest {
+    private LocalDate startDate;
+    private LocalDate endDate;
+    private String currency;
+}
+

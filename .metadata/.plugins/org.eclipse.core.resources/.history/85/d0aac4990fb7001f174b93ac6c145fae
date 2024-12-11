@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS forex_rates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    usd_to_ntd DECIMAL(10, 4) NOT NULL,
+    exchange_date TIMESTAMP NOT NULL
+);

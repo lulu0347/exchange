@@ -1,0 +1,40 @@
+package com.example.demo.forex;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.web.client.RestTemplate;
+
+@SpringBootTest
+public class ForexBatchServiceTest {
+
+    @MockBean
+    private ForexRateRepository forexRateRepository;
+
+    @MockBean
+    private RestTemplate restTemplate;
+
+    @Test
+    void testFetchAndStoreForexRates() {
+        // Mock API Response
+        Map<String, Object>[] mockResponse = new Map[] {
+            Map.of("Currency", "USD", "Exrate", "30.123", "Date", "2024-12-09T18:00:00")
+        };
+
+        when(restTemplate.getForObject(any(String.class), eq(Map[].class))).thenReturn(mockResponse);
+
+        ForexBatchService service = new ForexBatchService(forexRateRepository, restTemplate);
+        service.fetchAndStoreForexRates();
+
+        // Verify repository save was called
+        verify(forexRateRepository, times(1)).save(any(ForexRate.class));
+    }
+}

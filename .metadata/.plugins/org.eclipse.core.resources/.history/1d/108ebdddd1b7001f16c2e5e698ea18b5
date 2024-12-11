@@ -1,0 +1,56 @@
+package com.example.demo.collection;
+
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.LocalDateTime;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.web.client.RestTemplate;
+
+import com.example.demo.collection.service.CollectionBatchService;
+
+public class CollectionBatchServiceTest {
+	
+	@Mock
+	private CollectionRepository collectionRepository;
+
+	@Mock
+	private RestTemplate restTemplate;
+
+	@InjectMocks
+	private CollectionBatchService collectionBatchService;
+
+	public CollectionBatchServiceTest() {
+		MockitoAnnotations.openMocks(this);
+	}
+
+	@Test
+	public void testGetExchangeData() {
+		
+		String mockApiResponse = "[\n" + "  { \"Date\": \"20241209\", \"USD/NTD\": \"30.1234\" },\n"
+				+ "  { \"Date\": \"20241210\", \"USD/NTD\": \"30.5678\" }\n" + "]";
+
+		when(restTemplate.getForObject("https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates", String.class))
+				.thenReturn(mockApiResponse);
+
+		collectionBatchService.getExchangeData();
+
+		verify(collectionRepository, times(2)).save(argThat(collection -> {
+			if (collection.getUsdToNtd() == 30.1234
+					&& collection.getExchangeDate().equals(LocalDateTime.of(2024, 12, 9, 18, 0))) {
+				return true;
+			}
+			if (collection.getUsdToNtd() == 30.5678
+					&& collection.getExchangeDate().equals(LocalDateTime.of(2024, 12, 10, 18, 0))) {
+				return true;
+			}
+			return false;
+		}));
+	}
+}

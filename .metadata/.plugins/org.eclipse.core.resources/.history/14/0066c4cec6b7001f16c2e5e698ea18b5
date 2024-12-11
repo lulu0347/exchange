@@ -1,0 +1,80 @@
+package com.example.demo.collection;
+
+import java.lang.reflect.Type;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
+import lombok.RequiredArgsConstructor;
+
+
+@Service
+@RequiredArgsConstructor
+@Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class, timeout = 60)
+public class CollectionBatchService {
+
+    private final CollectionRepository collectionRepository;
+    private final RestTemplate restTemplate;
+
+    @Scheduled(cron = "0 0 18 * * ?")
+    public void getExchangeData() {
+    	
+        final String apiUrl = "https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates";
+        
+        try {
+            String response = restTemplate.getForObject(apiUrl, String.class);
+            
+            Gson gson = new Gson();
+            Type listType = new TypeToken<List<Map<String, String>>>() {}.getType();
+            List<Map<String, String>> rates = gson.fromJson(response, listType);
+
+            for (Map<String, String> rate : rates) {
+                String dateStr = rate.get("Date");
+                String usdToNtdStr = rate.get("USD/NTD");
+
+                if (dateStr != null && usdToNtdStr != null) {
+                    LocalDateTime exchangeDate = LocalDateTime.parse(dateStr + " 18:00:00", DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss"));
+                    Double usdToNtd = Double.valueOf(usdToNtdStr);
+
+                    Collection collection = new Collection();
+                    collection.setUsdToNtd(usdToNtd);
+                    collection.setExchangeDate(exchangeDate);
+
+                    collectionRepository.save(collection);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    
+    public List<ForexResponse> getHistoricalRates(LocalDate startDate, LocalDate endDate, String currency) {
+        if (startDate.isBefore(LocalDate.now().minusYears(1)) || endDate.isAfter(LocalDate.now().minusDays(1))) {
+            throw new IllegalArgumentException("日期區間不符");
+        }
+
+        if (!"usd".equalsIgnoreCase(currency)) {
+            throw new IllegalArgumentException("僅支援美元查詢");
+        }
+
+        return collectionRepository.findAll().stream()
+                .filter(c -> !c.getExchangeDate().toLocalDate().isBefore(startDate) &&
+                             !c.getExchangeDate().toLocalDate().isAfter(endDate))
+                .map(c -> new ForexResponse(
+                        c.getExchangeDate().format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                        c.getUsdToNtd().toString()
+                ))
+                .collect(Collectors.toList());
+    }
+}
